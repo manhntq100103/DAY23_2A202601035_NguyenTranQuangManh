@@ -12,6 +12,9 @@ Usage in nodes:
 from __future__ import annotations
 
 import os
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
 
 
 def get_llm(model: str | None = None, temperature: float = 0.0):
@@ -52,6 +55,16 @@ def get_llm(model: str | None = None, temperature: float = 0.0):
             raise RuntimeError("Install: pip install langchain-anthropic") from exc
         return ChatAnthropic(
             model=model or os.getenv("LLM_MODEL", "claude-sonnet-4-20250514"),
+            temperature=temperature,
+        )
+
+    if os.getenv("GROQ_API_KEY"):
+        try:
+            from langchain_groq import ChatGroq
+        except ImportError as exc:
+            raise RuntimeError("Install: pip install langchain-groq") from exc
+        return ChatGroq(
+            model=model or os.getenv("LLM_MODEL", "openai/gpt-oss-20b"),
             temperature=temperature,
         )
 
