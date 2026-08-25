@@ -19,6 +19,10 @@ from .state import initial_state
 app = typer.Typer(no_args_is_help=True)
 
 
+def _graph_for(kind: str, database_url: str | None):
+    return build_graph(checkpointer=build_checkpointer(kind, database_url))
+
+
 @app.command("run-scenarios")
 def run_scenarios(
     config: Annotated[Path, typer.Option("--config")],
@@ -40,6 +44,48 @@ def run_scenarios(
     if cfg.get("report_path"):
         write_report(report, cfg["report_path"])
     typer.echo(f"Wrote metrics to {output}")
+
+
+@app.command("state-history")
+def state_history(
+    thread_id: Annotated[str, typer.Option("--thread-id")],
+    database: Annotated[Path, typer.Option("--database")] = Path("checkpoints.sqlite"),
+    limit: Annotated[int, typer.Option("--limit")] = 20,
+) -> None:
+    """List persisted checkpoints for a thread (time-travel inspection)."""
+    graph = _graph_for("sqlite", str(database))
+    config = {"configurable": {"thread_id": thread_id}}
+    for index, snapshot in enumerate(graph.get_state_history(config)):
+        if index >= limit:
+            break
+        typer.echo(json.dumps({"step": (snapshot.metadata or {}).get("step"), "config": snapshot.config,
+                               "values": snapshot.values}, default=str))
+
+
+@app.command("replay")
+def replay(
+    thread_id: Annotated[str, typer.Option("--thread-id")],
+    database: Annotated[Path, typer.Option("--database")] = Path("checkpoints.sqlite"),
+) -> None:
+    """Resume a persisted thread after a process restart."""
+    graph = _graph_for("sqlite", str(database))
+    config = {"configurable": {"thread_id": thread_id}}
+    snapshot = next(graph.get_state_history(config), None)
+    if snapshot is None:
+        raise typer.BadParameter(f"No checkpoint found for thread {thread_id}")
+    result = graph.invoke(None, config=snapshot.config)
+    if "__interrupt__" in result:
+        typer.echo(json.dumps(result, default=str))
+    else:
+        typer.echo(json.dumps(result, default=str))
+
+
+@app.command("diagram")
+def diagram(output: Annotated[Path, typer.Option("--output")] = Path("outputs/graph.mmd")) -> None:
+    """Export the compiled graph as Mermaid text."""
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(build_graph().get_graph().draw_mermaid(), encoding="utf-8")
+    typer.echo(f"Wrote Mermaid diagram to {output}")
 
 
 @app.command("validate-metrics")

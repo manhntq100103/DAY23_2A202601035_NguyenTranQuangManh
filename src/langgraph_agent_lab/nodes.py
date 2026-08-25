@@ -50,6 +50,30 @@ def tool_node(state: AgentState) -> dict:
     return {"tool_results": [result], "events": [make_event("tool", event_type, result)]}
 
 
+def parallel_tool_node(state: AgentState) -> dict:
+    """Run one independent tool branch created by a LangGraph ``Send``."""
+    task = state.get("fanout_task", "lookup")
+    query = state.get("query", "")
+    result = f"Parallel {task} result for: {query}"
+    return {
+        "tool_results": [result],
+        "events": [make_event("parallel_tool", "completed", result, task=task)],
+    }
+
+
+def parallel_join_node(state: AgentState) -> dict:
+    """Barrier node reached after both parallel tool branches complete."""
+    return {
+        "events": [
+            make_event(
+                "parallel_join",
+                "completed",
+                f"joined {len(state.get('tool_results', []))} parallel results",
+            )
+        ]
+    }
+
+
 def evaluate_node(state: AgentState) -> dict:
     """Determine whether the most recent tool result should be retried."""
     results = state.get("tool_results", [])

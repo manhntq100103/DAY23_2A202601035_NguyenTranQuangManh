@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 from typing import Any
 
 
@@ -29,9 +30,12 @@ def build_checkpointer(kind: str = "memory", database_url: str | None = None) ->
         path = database_url or "checkpoints.sqlite"
         if path.startswith("sqlite:///"):
             path = path.removeprefix("sqlite:///")
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(path, check_same_thread=False)
         connection.execute("PRAGMA journal_mode=WAL")
-        return SqliteSaver(conn=connection)
+        saver = SqliteSaver(conn=connection)
+        saver.setup()
+        return saver
     if kind == "postgres":
         raise NotImplementedError(
             "TODO(student): implement Postgres checkpointer (optional extension)"

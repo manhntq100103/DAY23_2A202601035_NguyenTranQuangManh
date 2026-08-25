@@ -9,6 +9,20 @@ from __future__ import annotations
 from .state import AgentState
 
 
+def route_after_classify_fanout(state: AgentState):
+    """Route tool requests to two concurrent workers using ``Send``."""
+    from langgraph.graph import END
+    from langgraph.types import Send
+
+    route = state.get("route", "")
+    if route == "tool":
+        return [
+            Send("parallel_tool", {**state, "fanout_task": "order_status"}),
+            Send("parallel_tool", {**state, "fanout_task": "account_context"}),
+        ]
+    return route_after_classify(state) if route else END
+
+
 def route_after_classify(state: AgentState) -> str:
     """Map classified route to the next graph node.
 
